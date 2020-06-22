@@ -40,9 +40,9 @@ const db = new Database({
     insecureAuth: true
 });
 
-const distinctManagerSQL = "SELECT CONCAT(first_name,' ', last_name) as manager, id FROM employee "+
-                            "where id in (SELECT distinct manager_id from employee);" 
-const distinctRole = "SELECT DISTINCT title, id FROM role;"
+const distinctManagerSQL = "SELECT CONCAT(first_name,' ', last_name) as manager, id FROM employee " +
+    "where id in (SELECT distinct manager_id from employee);"
+const distinctRoleSQL = "SELECT DISTINCT title, id FROM role;"
 
 async function start() {
 
@@ -69,108 +69,116 @@ async function start() {
             ]
         }
     ])
-    console.log( response.action )
-    if ( response.action == "viewAll" ){
+    console.log(response.action)
+    if (response.action == "viewAll") {
         viewAllEmployees()
-    } else if ( response.action == "viewAllbyDept" ){
+    } else if (response.action == "viewAllbyDept") {
         viewAllEmployeesbyDept()
-    } else if ( response.action == "viewAllbyManager" ){
+    } else if (response.action == "viewAllbyManager") {
         viewAllEmployeesbyManager()
-    } else if ( response.action == "addEmp" ){
+    } else if (response.action == "addEmp") {
         addEmployee()
+    } else if (response.action == "removeEmp") {
+        removeEmployee()
     }
-    db.end();
+
 }
 
-async function viewAllEmployees(){
-    let employeeList = await db.query( 
-        "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, "+
-        "d.name AS department, r.salary AS salary, CONCAT(m.first_name,' ',m.last_name) AS manager "+
-        "FROM employee AS emp "+
-        "LEFT JOIN employee AS m ON (emp.manager_id=m.id) "+
-        "LEFT JOIN role AS r ON (emp.role_id=r.id) "+
-        "LEFT JOIN department AS d ON (r.department_id=d.id)" 
+async function viewAllEmployees() {
+    let employeeList = await db.query(
+        "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, " +
+        "d.name AS department, r.salary AS salary, CONCAT(m.first_name,' ',m.last_name) AS manager " +
+        "FROM employee AS emp " +
+        "LEFT JOIN employee AS m ON (emp.manager_id=m.id) " +
+        "LEFT JOIN role AS r ON (emp.role_id=r.id) " +
+        "LEFT JOIN department AS d ON (r.department_id=d.id)"
     )
-    console.table( employeeList )
+    console.table(employeeList)
     start()
 }
 
-async function viewAllEmployeesbyDept(){
+async function viewAllEmployeesbyDept() {
     dept = []
-    const dbDept = await db.query( "SELECT * from department" )
-    dbDept.forEach( function(item) {
-        dept.push( {name: item.name, value: item.id} ) 
+    const dbDept = await db.query("SELECT * from department")
+    dbDept.forEach(function (item) {
+        dept.push({ name: item.name, value: item.id })
     })
     response = await inquirer.prompt([
-        {   message: "Which department do you want to view?",
+        {
+            message: "Which department do you want to view?",
             type: "list",
             name: "dept",
             choices: dept
         }
     ])
     let employeeList = await db.query(
-        "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, "+
-        "d.name AS department, r.salary AS salary, CONCAT(m.first_name,' ',m.last_name) AS manager "+
-        "FROM employee AS emp "+
-        "LEFT JOIN employee AS m ON (emp.manager_id=m.id) "+
-        "LEFT JOIN role AS r ON (emp.role_id=r.id) "+
+        "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, " +
+        "d.name AS department, r.salary AS salary, CONCAT(m.first_name,' ',m.last_name) AS manager " +
+        "FROM employee AS emp " +
+        "LEFT JOIN employee AS m ON (emp.manager_id=m.id) " +
+        "LEFT JOIN role AS r ON (emp.role_id=r.id) " +
         "LEFT JOIN department AS d ON (r.department_id=?)", response.dept
     )
-    console.table ( employeeList )
+    console.table(employeeList)
     start()
 }
 
-async function viewAllEmployeesbyManager(){
+async function viewAllEmployeesbyManager() {
     manager = []
-    const dbManager = await db.query( distinctManagerSQL )
-    dbManager.forEach( function(item) {
-        manager.push( {name: item.manager, value: item.id} ) 
+    const dbManager = await db.query(distinctManagerSQL)
+    dbManager.forEach(function (item) {
+        manager.push({ name: item.manager, value: item.id })
     })
     response = await inquirer.prompt([
-        {   message: "Which employee manager do you want to view?",
+        {
+            message: "Which employee manager do you want to view?",
             type: "list",
             name: "manager",
             choices: manager
         }
     ])
     let employeeList = await db.query(
-        "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, "+
-        "d.name AS department, r.salary AS salary, CONCAT(m.first_name,' ',m.last_name) AS manager "+
-        "FROM employee AS emp, role AS r, department as d, employee AS m "+
-        "WHERE emp.manager_id=? "+
-        "AND emp.role_id=r.id "+
-        "AND r.department_id=d.id "+
+        "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, " +
+        "d.name AS department, r.salary AS salary, CONCAT(m.first_name,' ',m.last_name) AS manager " +
+        "FROM employee AS emp, role AS r, department as d, employee AS m " +
+        "WHERE emp.manager_id=? " +
+        "AND emp.role_id=r.id " +
+        "AND r.department_id=d.id " +
         "AND emp.manager_id=m.id", response.manager
     )
-    console.table ( employeeList )
+    console.table(employeeList)
     start()
 }
 
-async function addEmployee(){
+async function addEmployee() {
     role = [], manager = []
-    dbRole = await db.query( distinctRole )
-    dbRole.forEach( function(item) {
-        role.push( {name: item.title, value: item.id} ) 
+    dbRole = await db.query(distinctRoleSQL)              // get distinct roles
+    dbRole.forEach(function (item) {
+        role.push({ name: item.title, value: item.id })
     })
-    const dbManager = await db.query( distinctManagerSQL )
-    dbManager.forEach( function(item) {
-        manager.push( {name: item.manager, value: item.id} ) 
+    const dbManager = await db.query(distinctManagerSQL)  // get distinct manager names
+    dbManager.forEach(function (item) {
+        manager.push({ name: item.manager, value: item.id })
     })
     response = await inquirer.prompt([
-        {   message: "What is the employee's first name?",
+        {
+            message: "What is the employee's first name?",
             type: "input",
             name: "firstname"
         },
-        {   message: "What is the employee's last name?",
+        {
+            message: "What is the employee's last name?",
             type: "input",
             name: "lastname"
         },
-        {   message: "What is the employee's role?",
+        {
+            message: "What is the employee's role?",
             type: "list",
             name: "role",
             choices: role
         },
-        {   message: "Who is the employee's manager?",
+        {
+            message: "Who is the employee's manager?",
             type: "list",
             name: "manager",
             choices: manager
@@ -179,18 +187,47 @@ async function addEmployee(){
     insertResponse = await db.query(
         "INSERT INTO employee SET ?",
         {
-          first_name: response.firstname,
-          last_name: response.lastname,
-          role_id: response.role,
-          manager_id: response.manager
+            first_name: response.firstname,
+            last_name: response.lastname,
+            role_id: response.role,
+            manager_id: response.manager
         })
-        if (insertResponse.err) {
-            throw err
-            process.exit
+    if (insertResponse.err) {
+        throw err
+        process.exit
+    }
+    console.log(`${response.first_name} ${last_name} was added successfully to the database`);
+    // re-prompt the user
+    start()
+}
+
+async function removeEmployee() {
+    employee = []
+    const dbEmployee = await db.query(
+        "SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;"
+    )
+    dbEmployee.forEach(function (item) {
+        employee.push({ name: item.name, value: item.id })
+    })
+    response = await inquirer.prompt([
+        {
+            message: "Which employee do you want to remove?",
+            type: "list",
+            name: "employee",
+            choices: employee
         }
-        console.log("The employee was added successfully!");
-        // re-prompt the user for if they want to bid or post
-        start()
+    ])
+    console.log(`id: ${response.employee}`)
+    deleteResponse = await db.query(
+        "DELETE FROM employee WHERE id=?", response.employee)
+    if (deleteResponse.err) {
+        throw err
+        process.exit
+    }
+    console.log(`Removed employee from the database`);
+    // re-prompt the user
+    start()
+
 }
 
 clear();
