@@ -1,11 +1,12 @@
-// loads confirmation information from the .env file
-require('dotenv').config()
-
-const mysql = require("mysql");
-const inquirer = require("inquirer");
-const chalk = require('chalk');
-const clear = require('clear');
-const figlet = require('figlet');
+require('dotenv').config()      // loads confirmation information from the .env file
+const mysql = require("mysql")
+const inquirer = require("inquirer")
+const chalk = require('chalk')
+const clear = require('clear')
+const figlet = require('figlet')
+const cTable = require('console.table')
+// regular expressions to validate input
+const regexName = /^[a-zA-Z-,]+(\s{0,1}[a-zA-Z-, ])*$/
 
 class Database {
     constructor(config) {
@@ -44,6 +45,13 @@ const distinctManagerSQL = "SELECT CONCAT(first_name,' ', last_name) as manager,
     "where id in (SELECT distinct manager_id from employee);"
 const distinctRoleSQL = "SELECT DISTINCT title, id FROM role;"
 
+
+// function to validate name
+function validateName(inputtxt) {
+    return (!regexName.test(inputtxt)) ? false : true
+}
+
+
 async function start() {
 
     // const dbroles = await db.query("SELECT * from role")
@@ -66,7 +74,13 @@ async function start() {
                 { name: "Remove Employee", value: "removeEmp" },
                 { name: "Update Employee Role", value: "updateEmpRole" },
                 { name: "Update Employee Manager", value: "updateEmpManager" },
-            ]
+                { name: "View All Roles", value: "viewRole" },
+                { name: "Add Role", value: "addRole" },
+                { name: "Remove Role", value: "removeRole" },
+                { name: "View All Departments", value: "viewDepts" },
+                { name: "Add Department", value: "addDept" },
+                { name: "Remove Department", value: "removeDept" },
+                { name: "Exit", value: "exit" },]
         }
     ])
     console.log(response.action)
@@ -80,8 +94,16 @@ async function start() {
         addEmployee()
     } else if (response.action == "removeEmp") {
         removeEmployee()
-    }
+    } else if (response.action == "viewDepts") {
+        viewDepts()
+    } else if (response.action == "addDept") {
+        addDept()
+    } else if (response.action == "removeDept") {
+        removeDept()
 
+    } else if (response.action == "exit") {
+        db.close()
+    }
 }
 
 async function viewAllEmployees() {
@@ -164,12 +186,30 @@ async function addEmployee() {
         {
             message: "What is the employee's first name?",
             type: "input",
-            name: "firstname"
+            name: "firstname",
+            validate: (input) => {
+                if (input == "") {
+                    return `Error: Please enter the ${chalk.red("Employee's First Name")}`
+                }
+                if (!validateName(input)) {
+                    return `Error: Please enter a valid ${chalk.red("Employee's First Name")}`
+                }
+                return true
+            }
         },
         {
             message: "What is the employee's last name?",
             type: "input",
-            name: "lastname"
+            name: "lastname",
+            validate: (input) => {
+                if (input == "") {
+                    return `Error: Please enter the ${chalk.red("Employee's Last Name")}`
+                }
+                if (!validateName(input)) {
+                    return `Error: Please enter a valid ${chalk.red("Employee's Last Name")}`
+                }
+                return true
+            }
         },
         {
             message: "What is the employee's role?",
@@ -219,15 +259,86 @@ async function removeEmployee() {
     ])
     console.log(`id: ${response.employee}`)
     deleteResponse = await db.query(
-        "DELETE FROM employee WHERE id=?", response.employee)
+        "DELETE FROM employee WHERE id=?", response.employee
+    )
     if (deleteResponse.err) {
         throw err
         process.exit
     }
-    console.log(`Removed employee from the database`);
+    console.log(`Removed employee from the database`)
     // re-prompt the user
     start()
 
+}
+
+async function viewDepts() {
+    depts = []
+    dbDepts = await db.query(
+        "SELECT * from department"
+    )
+    console.table(dbDepts)
+    start()
+}
+
+async function addDept() {
+    response = await inquirer.prompt([
+        {
+            message: "What is the name of the Department?",
+            type: "input",
+            name: "deptName",
+            validate: (input) => {
+                if (input == "") {
+                    return `Error: Please enter the ${chalk.red("Department Name")}`
+                }
+                if (!validateName(input)) {
+                    return `Error: Please enter a valid ${chalk.red("Department Name")}`
+                }
+                return true
+            }
+        }
+    ])
+    let dept = response.deptName
+    insertResponse = await db.query(
+        "INSERT INTO department SET ?", { name: response.deptName })
+    if (insertResponse.err) {
+        throw err
+        process.exit
+    }
+    console.log(`Added department ${response.deptName} to the database`)
+    start()
+}
+
+async function removeDept() {
+    dept = []
+    const dbDept = await db.query("SELECT * from department")
+    dbDept.forEach(function (item) {
+        dept.push({ name: item.name, value: item.id })
+    })
+    response = await inquirer.prompt([
+    {
+        message: "Which department do you want to remove?",
+        type: "list",
+        name: "dept",
+        choices: dept
+    }])
+    console.log(response.dept)
+    // update role table if department_id is used
+    updateResponse = await db.query(
+        "UPDATE role SET department_id=null WHERE department_id=?", response.dept
+    )
+    if (updateResponse.err){
+        throw err
+        process.exit()
+    }
+    deleteResponse = await db.query(
+        "DELETE FROM department WHERE id=?", response.dept
+    )
+    if (deleteResponse.err){
+        throw err
+        process.exit()
+    }
+    console.log("Removed the department from the database")
+    start()
 }
 
 clear();
