@@ -5,6 +5,8 @@ const chalk = require('chalk')
 const clear = require('clear')
 const figlet = require('figlet')
 const cTable = require('console.table')
+const util = require('util')
+const exec = util.promisify(require('child_process').exec)
 // regular expressions to validate input
 const regexName = /^[a-zA-Z-,]+(\s{0,1}[a-zA-Z-, ])*$/
 
@@ -39,7 +41,7 @@ const db = new Database({
     password: process.env.DB_PWD,
     database: process.env.DB_NAME,
     insecureAuth: true
-});
+})
 
 const distinctManagerSQL = "SELECT CONCAT(first_name,' ', last_name) as manager, id FROM employee " +
     "where id in (SELECT distinct manager_id from employee);"
@@ -53,17 +55,17 @@ function validateName(inputtxt) {
 
 
 async function start() {
+    const command = process.argv[2]
 
-    // const dbroles = await db.query("SELECT * from role")
-    // roles = []
-    // dbroles.forEach(function (item) {
-    //     roles.push({ name: item.title, value: item.id })
-    // })
-    // console.log(`roles: `, roles)
-
+    if (command == 'init') {
+        // re-create database if init is passed as an argument
+        const { stdout, stderr } = await exec(`mysql -uroot -p${process.env.DB_PWD} < db/seed.sql`);
+        //   console.log('stdout:', stdout);
+        //   console.log('stderr:', stderr);
+    }
     response = await inquirer.prompt([
         {
-            message: "What would you like to do?",
+            message: `${chalk.green("What would you like to do?")}`,
             type: "list",
             name: "action",
             choices: [
@@ -96,6 +98,8 @@ async function start() {
         await removeEmployee()
     } else if (response.action == "updateEmpRole") {
         await updateEmpRole()
+    } else if (response.action == "updateEmpManager") {
+        await updateEmpManager()
     } else if (response.action == "viewRoles") {
         await viewRoles()
     } else if (response.action == "viewDepts") {
@@ -104,11 +108,12 @@ async function start() {
         await addDept()
     } else if (response.action == "removeDept") {
         await removeDept()
+    } else if (response.action == "viewDeptBudget") {
+        await viewDeptBudget()
     } else if (response.action == "addRole") {
         await addRole()
     } else if (response.action == "removeRole") {
         await removeRole()
-
     } else if (response.action == "exit") {
         await db.close()
     }
@@ -130,24 +135,24 @@ async function viewAllEmployees() {
 async function viewAllEmployeesbyDept() {
     dept = []
     const dbDept = await db.query("SELECT * from department")
-    dbDept.forEach(function (item) {
-        dept.push({ name: item.name, value: item.id })
-    })
+    dbDept.forEach(function (item) { dept.push({ name: item.name, value: item.id }) })
     response = await inquirer.prompt([
         {
-            message: "Which department do you want to view?",
+            message: `${chalk.green("Which department do you want to view?")}`,
             type: "list",
             name: "dept",
             choices: dept
         }
     ])
+    console.log(response.dept)
     let employeeList = await db.query(
-        "SELECT emp.id, emp.first_name, emp.last_name, r.title, d.name, r.salary, CONCAT(m.first_name,' ',m.last_name) AS manager "+
-        "FROM employee emp, role r, department d, employee m "+
-        "WHERE emp.manager_id=m.id "+ 
-        "AND d.id=r.department_id "+
-        "AND emp.role_id=r.id "+
-        "AND d.id=?", response.dept
+        "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, " +
+        "d.name AS department, r.salary AS salary, CONCAT(m.first_name,' ',m.last_name) AS manager " +
+        "FROM employee AS emp " +
+        "LEFT JOIN employee AS m ON (emp.manager_id=m.id) " +
+        "LEFT JOIN role AS r ON (emp.role_id=r.id) " +
+        "LEFT JOIN department AS d ON (r.department_id=d.id) " +
+        "WHERE r.department_id=?", response.dept
     )
     console.table(employeeList)
     start()
@@ -156,12 +161,10 @@ async function viewAllEmployeesbyDept() {
 async function viewAllEmployeesbyManager() {
     manager = []
     const dbManager = await db.query(distinctManagerSQL)
-    dbManager.forEach(function (item) {
-        manager.push({ name: item.manager, value: item.id })
-    })
+    dbManager.forEach(function (item) { manager.push({ name: item.manager, value: item.id }) })
     response = await inquirer.prompt([
         {
-            message: "Which employee manager do you want to view?",
+            message: `${chalk.green("Which employee manager do you want to view?")}`,
             type: "list",
             name: "manager",
             choices: manager
@@ -183,16 +186,13 @@ async function viewAllEmployeesbyManager() {
 async function addEmployee() {
     role = [], manager = []
     dbRole = await db.query(distinctRoleSQL)              // get distinct roles
-    dbRole.forEach(function (item) {
-        role.push({ name: item.title, value: item.id })
-    })
+    dbRole.forEach(function (item) { role.push({ name: item.title, value: item.id }) })
     const dbManager = await db.query(distinctManagerSQL)  // get distinct manager names
-    dbManager.forEach(function (item) {
-        manager.push({ name: item.manager, value: item.id })
-    })
+    manager.push({ name: "None", value: null })
+    dbManager.forEach(function (item) { manager.push({ name: item.manager, value: item.id }) })
     response = await inquirer.prompt([
         {
-            message: "What is the employee's first name?",
+            message: `${chalk.green("What is the employee's first name?")}`,
             type: "input",
             name: "firstname",
             validate: (input) => {
@@ -206,7 +206,7 @@ async function addEmployee() {
             }
         },
         {
-            message: "What is the employee's last name?",
+            message: `${chalk.green("What is the employee's last name?")}`,
             type: "input",
             name: "lastname",
             validate: (input) => {
@@ -220,13 +220,13 @@ async function addEmployee() {
             }
         },
         {
-            message: "What is the employee's role?",
+            message: `${chalk.green("What is the employee's role?")}`,
             type: "list",
             name: "role",
             choices: role
         },
         {
-            message: "Who is the employee's manager?",
+            message: `${chalk.green("Who is the employee's manager?")}`,
             type: "list",
             name: "manager",
             choices: manager
@@ -251,69 +251,58 @@ async function addEmployee() {
 
 async function removeEmployee() {
     employee = []
-    const dbEmployee = await db.query(
-        "SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;"
-    )
-    dbEmployee.forEach(function (item) {
-        employee.push({ name: item.name, value: item.id })
-    })
+    const dbEmployee = await db.query("SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;")
+    dbEmployee.forEach(function (item) { employee.push({ name: item.name, value: item.id }) })
     response = await inquirer.prompt([
         {
-            message: "Which employee do you want to remove?",
+            message: `${chalk.green("Which employee do you want to remove?")}`,
             type: "list",
             name: "employee",
             choices: employee
+        },
+        {
+            message: `${chalk.green("Are you sure?")}`,
+            type: "confirm",
+            name: "confirm"
         }
     ])
-    deleteResponse = await db.query(
-        "DELETE FROM employee WHERE id=?", response.employee
-    )
-    if (deleteResponse.err) {
-        throw err
-        process.exit
+    if (response.confirm) {
+        deleteResponse = await db.query("DELETE FROM employee WHERE id=?", response.employee)
+        if (deleteResponse.err) {
+            throw err
+            process.exit
+        }
+        console.log(`Removed employee from the database`)
     }
-    console.log(`Removed employee from the database`)
     // re-prompt the user
     start()
 
 }
 
-async function updateEmpRole(){
+async function updateEmpRole() {
     employee = []
-    const dbEmployee = await db.query(
-        "SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;"
-    )
-    dbEmployee.forEach(function (item) {
-        employee.push({ name: item.name, value: item.id })
-    })
+    const dbEmployee = await db.query("SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;")
+    dbEmployee.forEach(function (item) { employee.push({ name: item.name, value: item.id }) })
     employeeResponse = await inquirer.prompt([
         {
-            message: "Which employee do you want to update?",
+            message: `${chalk.green("Which employee do you want to update?")}`,
             type: "list",
             name: "employee",
             choices: employee
         }
     ])
-    // console.log(`[response.employee]: ${response.employee}`)
     // get roles not equal to the employee id
     role = []
-    dbRoles = await db.query(
-        "SELECT * from role WHERE id <> ?", employeeResponse.employee
-    )
-    dbRoles.forEach(function (item) {
-        role.push({ name: item.title, value: item.id }) 
-    })
+    dbRoles = await db.query("SELECT * from role WHERE id <> ?", employeeResponse.employee)
+    dbRoles.forEach(function (item) { role.push({ name: item.title, value: item.id }) })
     response = await inquirer.prompt([
         {
-            message: "Which role do you want to assign?",
+            message: `${chalk.green("Which role do you want to assign?")}`,
             type: "list",
             name: "role",
             choices: role
         }
-
-
     ])
-    // console.log(`[response.role]: ${response.role}`)
     updateResponse = await db.query(
         "UPDATE employee SET role_id = ? WHERE id = ?", [response.role, employeeResponse.employee]
     )
@@ -322,6 +311,40 @@ async function updateEmpRole(){
         process.exit
     }
     console.log(`Role was updated successfully`)
+    start()
+}
+
+async function updateEmpManager() {
+    employee = []
+    dbEmployee = await db.query("SELECT CONCAT(first_name,' ',last_name) as employee, id from employee")
+    dbEmployee.forEach(function (item) { employee.push({ name: item.employee, value: item.id }) })
+    response = await inquirer.prompt(
+        {
+            message: `${chalk.green("Which employee's manager do you want to update?")}`,
+            type: "list",
+            name: "employee",
+            choices: employee
+        }
+    )
+    manager = []
+    manager.push({ name: "None", value: null })
+    employee.forEach(function (item) {
+        if (item.value !== response.employee) manager.push({ name: item.name, value: item.value })
+    })
+    managerResponse = await inquirer.prompt(
+        {
+            message: `${chalk.green("Which employee do you want to set as Manager for the selected employee?")}`,
+            type: "list",
+            name: "manager",
+            choices: manager
+        }
+    )
+    updateResponse = await db.query("UPDATE employee SET ? WHERE ?", [{ manager_id: managerResponse.manager }, { id: response.employee }])
+    if (updateResponse.err) {
+        throw err
+        process.exit
+    }
+    console.log(`Employee's Manager was updated successfully`)
     start()
 }
 
@@ -339,45 +362,36 @@ async function viewRoles() {
 async function addRole() {
     dept = []
     const dbDept = await db.query("SELECT * from department")
-    dbDept.forEach(function (item) {
-        dept.push({ name: item.name, value: item.id })
-    })
+    dbDept.forEach(function (item) { dept.push({ name: item.name, value: item.id }) })
     response = await inquirer.prompt([
         {
-            message: "What is the title of the role you want to add?",
+            message: `${chalk.green("What is the title of the role you want to add?")}`,
             type: "input",
             name: "role",
             validate: (input) => {
-                if (input == "") {
-                    return `Error: Please enter the ${chalk.red("Role")}`
-                }
-                if (!validateName(input)) {
-                    return `Error: Please enter a valid ${chalk.red("Role")}`
-                }
+                if (input == "") { return `Error: Please enter the ${chalk.red("Role")}` }
+                if (!validateName(input)) { return `Error: Please enter a valid ${chalk.red("Role")}` }
                 return true
             }
         },
         {
-            message: "What is the salary?",
+            message: `${chalk.green("What is the salary?")}`,
             type: "input",
             name: "salary",
             validate: function (value) {
-                if (isNaN(value) === false && value !== "") {
-                    return true
-                }
+                if (isNaN(value) === false && value !== "") { return true }
                 return `Error: Please enter a valid ${chalk.red('Salary')}`
             }
         },
         {
-            message: "Which department is the role for?",
+            message: `${chalk.green("Which department is the role for?")}`,
             type: "list",
             name: "dept",
             choices: dept
         }
     ])
-    insertResponse = await db.query(
-        "INSERT INTO role SET ?", { title: response.role, salary: response.salary, department_id: response.dept }
-    )
+    insertResponse = await db.query("INSERT INTO role SET ?",
+        { title: response.role, salary: response.salary, department_id: response.dept })
     if (insertResponse.err) {
         throw err
         process.exit
@@ -388,36 +402,35 @@ async function addRole() {
 
 async function removeRole() {
     role = []
-    const dbRole = await db.query(
-        "SELECT * FROM role;"
-    )
-    dbRole.forEach(function (item) {
-        role.push({ name: item.title, value: item.id })
-    })
+    const dbRole = await db.query("SELECT * FROM role;")
+    dbRole.forEach(function (item) { role.push({ name: item.title, value: item.id }) })
     response = await inquirer.prompt([
         {
-            message: "Which role do you want to remove?",
+            message: `${chalk.green("Which role do you want to remove?")}`,
             type: "list",
             name: "role",
             choices: role
+        },
+        {
+            message: `${chalk.green("Are you sure?")}`,
+            type: "confirm",
+            name: "confirm"
         }
     ])
-    // update employee table if role was used
-    updateResponse = await db.query(
-        "UPDATE employee SET role_id=null WHERE role_id=?", response.role
-    )
-    if (updateResponse.err) {
-        throw err
-        process.exit()
+    if (response.confirm) {
+        // update employee table if role was used
+        updateResponse = await db.query("UPDATE employee SET role_id=null WHERE role_id=?", response.role)
+        if (updateResponse.err) {
+            throw err
+            process.exit()
+        }
+        deleteResponse = await db.query("DELETE FROM role WHERE id=?", response.role)
+        if (deleteResponse.err) {
+            throw err
+            process.exit
+        }
+        console.log(`Removed role from the database`)
     }
-    deleteResponse = await db.query(
-        "DELETE FROM role WHERE id=?", response.role
-    )
-    if (deleteResponse.err) {
-        throw err
-        process.exit
-    }
-    console.log(`Removed role from the database`)
     // re-prompt the user
     start()
 
@@ -425,9 +438,7 @@ async function removeRole() {
 
 async function viewDepts() {
     depts = []
-    dbDepts = await db.query(
-        "SELECT * from department"
-    )
+    dbDepts = await db.query("SELECT * from department")
     console.table(dbDepts)
     start()
 }
@@ -435,22 +446,17 @@ async function viewDepts() {
 async function addDept() {
     response = await inquirer.prompt([
         {
-            message: "What is the name of the Department?",
+            message: `${chalk.green("What is the name of the Department?")}`,
             type: "input",
             name: "deptName",
             validate: (input) => {
-                if (input == "") {
-                    return `Error: Please enter the ${chalk.red("Department Name")}`
-                }
-                if (!validateName(input)) {
-                    return `Error: Please enter a valid ${chalk.red("Department Name")}`
-                }
+                if (input == "") { return `Error: Please enter the ${chalk.red("Department Name")}` }
+                if (!validateName(input)) { return `Error: Please enter a valid ${chalk.red("Department Name")}` }
                 return true
             }
         }
     ])
-    insertResponse = await db.query(
-        "INSERT INTO department SET ?", { name: response.deptName })
+    insertResponse = await db.query("INSERT INTO department SET ?", { name: response.deptName })
     if (insertResponse.err) {
         throw err
         process.exit
@@ -462,32 +468,34 @@ async function addDept() {
 async function removeDept() {
     dept = []
     const dbDept = await db.query("SELECT * from department")
-    dbDept.forEach(function (item) {
-        dept.push({ name: item.name, value: item.id })
-    })
+    dbDept.forEach(function (item) { dept.push({ name: item.name, value: item.id }) })
     response = await inquirer.prompt([
         {
-            message: "Which department do you want to remove?",
+            message: `${chalk.green("Which department do you want to remove?")}`,
             type: "list",
             name: "dept",
             choices: dept
-        }])
-    // update role table if department_id is used
-    updateResponse = await db.query(
-        "UPDATE role SET department_id=null WHERE department_id=?", response.dept
-    )
-    if (updateResponse.err) {
-        throw err
-        process.exit()
+        },
+        {
+            message: `${chalk.green("Are you sure?")}`,
+            type: "confirm",
+            name: "confirm"
+        }
+    ])
+    if (response.confirm) {
+        // update role table if department_id is used
+        updateResponse = await db.query("UPDATE role SET department_id=null WHERE department_id=?", response.dept)
+        if (updateResponse.err) {
+            throw err
+            process.exit()
+        }
+        deleteResponse = await db.query("DELETE FROM department WHERE id=?", response.dept)
+        if (deleteResponse.err) {
+            throw err
+            process.exit()
+        }
+        console.log("Removed the department from the database")
     }
-    deleteResponse = await db.query(
-        "DELETE FROM department WHERE id=?", response.dept
-    )
-    if (deleteResponse.err) {
-        throw err
-        process.exit()
-    }
-    console.log("Removed the department from the database")
     start()
 }
 
