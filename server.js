@@ -94,6 +94,8 @@ async function start() {
         await addEmployee()
     } else if (response.action == "removeEmp") {
         await removeEmployee()
+    } else if (response.action == "updateEmpRole") {
+        await updateEmpRole()
     } else if (response.action == "viewRoles") {
         await viewRoles()
     } else if (response.action == "viewDepts") {
@@ -108,7 +110,7 @@ async function start() {
         await removeRole()
 
     } else if (response.action == "exit") {
-        db.close()
+        await db.close()
     }
 }
 
@@ -140,12 +142,12 @@ async function viewAllEmployeesbyDept() {
         }
     ])
     let employeeList = await db.query(
-        "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, " +
-        "d.name AS department, r.salary AS salary, CONCAT(m.first_name,' ',m.last_name) AS manager " +
-        "FROM employee AS emp " +
-        "LEFT JOIN employee AS m ON (emp.manager_id=m.id) " +
-        "LEFT JOIN role AS r ON (emp.role_id=r.id) " +
-        "LEFT JOIN department AS d ON (r.department_id=?)", response.dept
+        "SELECT emp.id, emp.first_name, emp.last_name, r.title, d.name, r.salary, CONCAT(m.first_name,' ',m.last_name) AS manager "+
+        "FROM employee emp, role r, department d, employee m "+
+        "WHERE emp.manager_id=m.id "+ 
+        "AND d.id=r.department_id "+
+        "AND emp.role_id=r.id "+
+        "AND d.id=?", response.dept
     )
     console.table(employeeList)
     start()
@@ -276,6 +278,53 @@ async function removeEmployee() {
 
 }
 
+async function updateEmpRole(){
+    employee = []
+    const dbEmployee = await db.query(
+        "SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;"
+    )
+    dbEmployee.forEach(function (item) {
+        employee.push({ name: item.name, value: item.id })
+    })
+    employeeResponse = await inquirer.prompt([
+        {
+            message: "Which employee do you want to update?",
+            type: "list",
+            name: "employee",
+            choices: employee
+        }
+    ])
+    // console.log(`[response.employee]: ${response.employee}`)
+    // get roles not equal to the employee id
+    role = []
+    dbRoles = await db.query(
+        "SELECT * from role WHERE id <> ?", employeeResponse.employee
+    )
+    dbRoles.forEach(function (item) {
+        role.push({ name: item.title, value: item.id }) 
+    })
+    response = await inquirer.prompt([
+        {
+            message: "Which role do you want to assign?",
+            type: "list",
+            name: "role",
+            choices: role
+        }
+
+
+    ])
+    // console.log(`[response.role]: ${response.role}`)
+    updateResponse = await db.query(
+        "UPDATE employee SET role_id = ? WHERE id = ?", [response.role, employeeResponse.employee]
+    )
+    if (updateResponse.err) {
+        throw err
+        process.exit
+    }
+    console.log(`Role was updated successfully`)
+    start()
+}
+
 async function viewRoles() {
     roles = []
     dbRoles = await db.query(
@@ -327,7 +376,8 @@ async function addRole() {
         }
     ])
     insertResponse = await db.query(
-        "INSERT INTO role SET ?", { title: response.role, salary: response.salary, department_id: response.dept })
+        "INSERT INTO role SET ?", { title: response.role, salary: response.salary, department_id: response.dept }
+    )
     if (insertResponse.err) {
         throw err
         process.exit
