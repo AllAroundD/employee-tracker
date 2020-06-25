@@ -7,8 +7,7 @@ const figlet = require('figlet')
 const cTable = require('console.table')
 const util = require('util')
 const exec = util.promisify(require('child_process').exec)
-// regular expressions to validate input
-const regexName = /^[a-zA-Z-,]+(\s{0,1}[a-zA-Z-, ])*$/
+const regexName = /^[a-zA-Z-,]+(\s{0,1}[a-zA-Z-, ])*$/      // regular expression to validate input
 
 class Database {
     constructor(config) {
@@ -43,6 +42,7 @@ const db = new Database({
     insecureAuth: true
 })
 
+const distinctEmployeeSQL = "SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;"
 const distinctManagerSQL = "SELECT CONCAT(first_name,' ', last_name) as manager, id FROM employee " +
     "where id in (SELECT distinct manager_id from employee);"
 const distinctRoleSQL = "SELECT DISTINCT title, id FROM role;"
@@ -55,6 +55,7 @@ function validateName(inputtxt) {
 }
 
 
+// This is the main screen that gets called for the menu
 async function start() {
     const command = process.argv[2]
 
@@ -121,6 +122,7 @@ async function start() {
     }
 }
 
+// This is to view all employees
 async function viewAllEmployees() {
     let employeeList = await db.query(
         "SELECT emp.id AS id, emp.first_name AS first_name, emp.last_name AS last_name, r.title AS title, " +
@@ -134,6 +136,7 @@ async function viewAllEmployees() {
     start()
 }
 
+// This is to view all employees by a specific department
 async function viewAllEmployeesbyDept() {
     dept = []
     const dbDept = await db.query("SELECT * from department")
@@ -160,6 +163,7 @@ async function viewAllEmployeesbyDept() {
     start()
 }
 
+// This is to view all employees by a specific manager
 async function viewAllEmployeesbyManager() {
     manager = []
     const dbManager = await db.query(distinctManagerSQL)
@@ -185,6 +189,7 @@ async function viewAllEmployeesbyManager() {
     start()
 }
 
+// This is to add an employee to the employee table
 async function addEmployee() {
     role = [], manager = []
     dbRole = await db.query(distinctRoleSQL)              // get distinct roles
@@ -251,9 +256,10 @@ async function addEmployee() {
     start()
 }
 
+// This is to remove an employee from the list
 async function removeEmployee() {
     employee = []
-    const dbEmployee = await db.query("SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;")
+    const dbEmployee = await db.query(distinctEmployeeSQL)
     dbEmployee.forEach(function (item) { employee.push({ name: item.name, value: item.id }) })
     response = await inquirer.prompt([
         {
@@ -281,9 +287,10 @@ async function removeEmployee() {
 
 }
 
+// This is to update the employee role for the employee that is prompted
 async function updateEmpRole() {
     employee = []
-    const dbEmployee = await db.query("SELECT CONCAT(first_name,' ', last_name) as name, id FROM employee;")
+    const dbEmployee = await db.query(distinctEmployeeSQL)
     dbEmployee.forEach(function (item) { employee.push({ name: item.name, value: item.id }) })
     employeeResponse = await inquirer.prompt([
         {
@@ -316,10 +323,11 @@ async function updateEmpRole() {
     start()
 }
 
+// This is to update the manager for specific employee that is prompted
 async function updateEmpManager() {
     employee = []
-    dbEmployee = await db.query("SELECT CONCAT(first_name,' ',last_name) as employee, id from employee")
-    dbEmployee.forEach(function (item) { employee.push({ name: item.employee, value: item.id }) })
+    dbEmployee = await db.query(distinctEmployeeSQL)
+    dbEmployee.forEach(function (item) { employee.push({ name: item.name, value: item.id }) })
     response = await inquirer.prompt(
         {
             message: `${chalk.green("Which employee's manager do you want to update?")}`,
@@ -350,6 +358,7 @@ async function updateEmpManager() {
     start()
 }
 
+// This is to display all of the employee roles
 async function viewRoles() {
     roles = []
     dbRoles = await db.query(
@@ -361,6 +370,7 @@ async function viewRoles() {
     start()
 }
 
+// This is to add the employee role.
 async function addRole() {
     dept = []
     const dbDept = await db.query("SELECT * from department")
