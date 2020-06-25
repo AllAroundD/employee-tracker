@@ -46,6 +46,7 @@ const db = new Database({
 const distinctManagerSQL = "SELECT CONCAT(first_name,' ', last_name) as manager, id FROM employee " +
     "where id in (SELECT distinct manager_id from employee);"
 const distinctRoleSQL = "SELECT DISTINCT title, id FROM role;"
+const distinctDeptSQL = "SELECT distinct id, name FROM department;"
 
 
 // function to validate name
@@ -81,6 +82,7 @@ async function start() {
                 { name: "Remove Role", value: "removeRole" },
                 { name: "View All Departments", value: "viewDepts" },
                 { name: "Add Department", value: "addDept" },
+                { name: "View Department Budget", value: "viewDeptBudget" },
                 { name: "Remove Department", value: "removeDept" },
                 { name: "Exit", value: "exit" },]
         }
@@ -496,6 +498,34 @@ async function removeDept() {
         }
         console.log("Removed the department from the database")
     }
+    start()
+}
+
+// Function to view the total budget for a department
+async function viewDeptBudget() {
+    dept = []
+    dbDept = await db.query(distinctDeptSQL)
+    dbDept.forEach(function (item) { dept.push({ name: item.name, value: item.id }) })
+    response = await inquirer.prompt(
+        {
+            message: "Which department do you want to see the budget for?",
+            type: "list",
+            name: "dept",
+            choices: dept
+        }
+    )
+    selectResponse = await db.query(
+        "SELECT d.name dept, r.title, r.salary "+
+        "FROM employee emp LEFT JOIN role r on emp.role_id = r.id "+
+        "LEFT JOIN department d ON r.department_id = d.id "+
+        "WHERE d.id = ? "+
+        "UNION "+
+        "SELECT 'Total', '-', SUM(r.salary) "+
+        "FROM employee emp LEFT JOIN role r on emp.role_id = r.id "+
+        "LEFT JOIN department d ON r.department_id = d.id "+
+        "WHERE d.id = ?;", [response.dept, response.dept]
+    )
+    console.table(selectResponse)
     start()
 }
 
