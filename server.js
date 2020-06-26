@@ -57,14 +57,6 @@ function validateName(inputtxt) {
 
 // This is the main screen that gets called for the menu
 async function start() {
-    const command = process.argv[2]
-
-    if (command == 'init') {
-        // re-create database if init is passed as an argument
-        const { stdout, stderr } = await exec(`mysql -uroot -p${process.env.DB_PWD} < db/seed.sql`);
-        //   console.log('stdout:', stdout);
-        //   console.log('stderr:', stderr);
-    }
     response = await inquirer.prompt([
         {
             message: `${chalk.green("What would you like to do?")}`,
@@ -85,7 +77,7 @@ async function start() {
                 { name: "Add Department", value: "addDept" },
                 { name: "View Department Budget", value: "viewDeptBudget" },
                 { name: "Remove Department", value: "removeDept" },
-                { name: "Exit", value: "exit" },]
+                { name: "Exit Application", value: "exit" },]
         }
     ])
     // console.log(response.action)
@@ -194,9 +186,12 @@ async function addEmployee() {
     role = [], manager = []
     dbRole = await db.query(distinctRoleSQL)              // get distinct roles
     dbRole.forEach(function (item) { role.push({ name: item.title, value: item.id }) })
-    const dbManager = await db.query(distinctManagerSQL)  // get distinct manager names
+    const dbManager = await db.query(distinctEmployeeSQL)  // get distinct employee names
+    manager = []
     manager.push({ name: "None", value: null })
-    dbManager.forEach(function (item) { manager.push({ name: item.manager, value: item.id }) })
+    dbManager.forEach(function (item) {
+        manager.push({ name: item.name, value: item.id })
+    })
     response = await inquirer.prompt([
         {
             message: `${chalk.green("What is the employee's first name?")}`,
@@ -525,26 +520,39 @@ async function viewDeptBudget() {
         }
     )
     selectResponse = await db.query(
-        "SELECT d.name dept, r.title, r.salary "+
-        "FROM employee emp LEFT JOIN role r on emp.role_id = r.id "+
-        "LEFT JOIN department d ON r.department_id = d.id "+
-        "WHERE d.id = ? "+
-        "UNION "+
-        "SELECT 'Total', '-', SUM(r.salary) "+
-        "FROM employee emp LEFT JOIN role r on emp.role_id = r.id "+
-        "LEFT JOIN department d ON r.department_id = d.id "+
+        "SELECT d.name dept, r.title, r.salary " +
+        "FROM employee emp LEFT JOIN role r on emp.role_id = r.id " +
+        "LEFT JOIN department d ON r.department_id = d.id " +
+        "WHERE d.id = ? " +
+        "UNION " +
+        "SELECT 'Total', '-', SUM(r.salary) " +
+        "FROM employee emp LEFT JOIN role r on emp.role_id = r.id " +
+        "LEFT JOIN department d ON r.department_id = d.id " +
         "WHERE d.id = ?;", [response.dept, response.dept]
     )
     console.table(selectResponse)
     start()
 }
 
-clear();
+async function init() {
+    // call to start menu
+    const command = process.argv[2]
+
+    if (command == 'init') {
+        // re-create database if init is passed as an argument
+        const { stdout, stderr } = await exec(`mysql -uroot -p${process.env.DB_PWD} < db/seed.sql`)
+        console.log("Database refreshed successfully")
+        //   console.log('stdout:', stdout);
+        //   console.log('stderr:', stderr);
+    }
+}
+
+init()
+clear()
 // display banner
 console.log(
     chalk.yellow(
         figlet.textSync('Employee Tracker', { horizontalLayout: 'full' })
     )
 )
-// call to start menu
 start()

@@ -48,7 +48,7 @@ INSERT INTO role VALUES( 0, "Lawyer", 190000.00, 4 );
 INSERT INTO employee VALUES( 1, "John", "Doe", 1, null);
 INSERT INTO employee VALUES( 0, "Mike", "Chan", 2, 1 );
 INSERT INTO employee VALUES( 0, "Ashley", "Rodriguez", 3, null );
-INSERT INTO employee VALUES( 0, "Kevin", "Tupik", 4, 4 );
+INSERT INTO employee VALUES( 0, "Kevin", "Tupik", 4, 3 );
 INSERT INTO employee VALUES( 0, "Malia", "Brown", 5, null );
 INSERT INTO employee VALUES( 0, "Sarah", "Lourd", 6, null );
 INSERT INTO employee VALUES( 0, "Tom", "Allen", 7, 6 );
